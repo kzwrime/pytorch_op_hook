@@ -1,5 +1,26 @@
 import torch
+import numpy as np
 from torch.utils._python_dispatch import TorchDispatchMode
+
+# Custom op implemented with numpy
+def numpy_matmul_custom_op(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """
+    Custom matrix multiplication implementation using numpy.
+    This replaces torch.mm with a numpy-based implementation.
+    """
+    # Convert torch tensors to numpy
+    a_np = a.detach().cpu().numpy()
+    b_np = b.detach().cpu().numpy()
+
+    # Perform matrix multiplication using numpy
+    result_np = np.matmul(a_np, b_np)
+
+    # Convert back to torch tensor with same device and dtype as input
+    device = a.device
+    dtype = a.dtype
+    result = torch.from_numpy(result_np).to(device=device, dtype=dtype)
+
+    return result
 
 class HijackMode(TorchDispatchMode):
     def __torch_dispatch__(self, func, types, args=(), kwargs=None):
@@ -7,9 +28,10 @@ class HijackMode(TorchDispatchMode):
         # func.overloadpacket contains operator metadata, e.g., torch.ops.aten.mm
         if func.overloadpacket == torch.ops.aten.mm:
             print(f"[Hijack] Captured torch.mm! Shapes: {args[0].shape} x {args[1].shape}")
+            print(f"[Hijack] Replacing with numpy-based custom op implementation")
 
-            # You can modify input args here, or return custom results directly
-            # return torch.ones(args[0].shape[0], args[1].shape[1])
+            # Replace with our numpy-based custom op
+            return numpy_matmul_custom_op(args[0], args[1])
 
         # 2. Pass through: execute the original operator
         # Note: calling func in TorchDispatchMode automatically passes through without recursive infinite loop
