@@ -15,19 +15,23 @@
 
 ### 已实现
 
-- ✅ **TorchDispatchMode** - 通过 PyTorch 的调度机制拦截算子调用
-  - 普通函数劫持
-  - 编译模式兼容（torch.compile）
-  - 自定义算子实现（如 NumPy 实现）
+- **01_TorchDispatchMode** - 通过 PyTorch 的调度机制拦截算子调用
+  - ✅ Eager 模式下，普通 Aten 算子函数劫持
+  - ✅ 自定义算子实现（如 NumPy 实现）
+  - ✅ 支持 @torch.library.custom_op 的自定义算子
+  - ❌ 编译模式不兼容（torch.compile）
+  - [01_TorchDispatchMode 具体说明](examples/01_TorchDispatchMode/README.md)
+
 
 ### 计划实现
 
-- ⏳ **Impl Override** - 直接覆盖 ATen 算子的底层实现
+- ⏳ **Impl Override** - 直接覆盖 ATen 算子的底层实现（预估：可以劫持，不兼容 compile）
 - ⏳ **Pattern Rewrite** - 通过模式匹配和重写来替换算子
-- ⏳ **Registering Custom Ops** - 注册自定义算子替换原生算子
 - ⏳ **TorchDynamo Hooks** - 在 Dynamo 编译过程中拦截算子
 - ⏳ **Backend Extensions** - 通过后端扩展机制劫持算子
 - ⏳ **Python-based Hook** - 使用 Python 钩子函数（如 `register_forward_hook`）
+
+- ⏳ **Registering Custom Ops** - 注册自定义算子替换原生算子（参考 01_TorchDispatchMode）
 
 ## 项目结构
 
@@ -50,8 +54,8 @@ pytorch_op_hook/
 
 ### 环境要求
 
-- Python >= 3.8
-- PyTorch >= 2.0
+- Python >= 3.10
+- PyTorch >= 2.8
 - NumPy
 
 ### 安装依赖
@@ -91,41 +95,6 @@ python examples/01_TorchDispatchMode/test_dispatch_py_with_compile.py
 python examples/01_TorchDispatchMode/verify_numpy_op.py
 ```
 
-## 使用示例
-
-### TorchDispatchMode 示例
-
-```python
-import torch
-import numpy as np
-from torch.utils._python_dispatch import TorchDispatchMode
-
-# 定义自定义算子实现
-def numpy_matmul_custom_op(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-    """使用 NumPy 实现矩阵乘法"""
-    a_np = a.detach().cpu().numpy()
-    b_np = b.detach().cpu().numpy()
-    result_np = np.matmul(a_np, b_np)
-    result = torch.from_numpy(result_np).to(device=a.device, dtype=a.dtype)
-    return result
-
-# 定义劫持模式
-class HijackMode(TorchDispatchMode):
-    def __torch_dispatch__(self, func, types, args=(), kwargs=None):
-        if func.overloadpacket == torch.ops.aten.mm:
-            print(f"[Hijack] 捕获 torch.mm! 形状: {args[0].shape} x {args[1].shape}")
-            return numpy_matmul_custom_op(args[0], args[1])
-        return func(*args, **kwargs)
-
-# 使用劫持模式
-x = torch.randn(3, 4)
-w = torch.randn(4, 5)
-
-hmd = HijackMode()
-with hmd:
-    y = torch.mm(x, w)  # 会被 HijackMode 拦截并替换为 NumPy 实现
-```
-
 ## 应用场景
 
 算子劫持技术可以用于：
@@ -137,20 +106,13 @@ with hmd:
 5. **A/B 测试** - 比较不同实现方式的性能差异
 6. **研究和实验** - 测试新的算子实现或优化策略
 
-## 方法对比
-
-| 方法 | 兼容性 | 性能影响 | 实现难度 | 适用场景 |
-|------|--------|----------|----------|----------|
-| TorchDispatchMode | ⭐⭐⭐⭐ | 低 | 低 | 通用劫持、调试 |
-| Impl Override | ⭐⭐ | 中 | 中 | 底层优化 |
-| Pattern Rewrite | ⭐⭐⭐ | 低 | 高 | 图优化 |
-| TorchDynamo Hooks | ⭐⭐⭐⭐ | 低 | 中 | 编译时优化 |
-| Backend Extensions | ⭐⭐⭐ | 低 | 高 | 生产环境 |
-| Python Hooks | ⭐⭐⭐⭐⭐ | 低 | 低 | 模型级操作 |
-
 ## 贡献指南
 
 欢迎贡献新的劫持方法示例、测试用例或改进建议！
+
+上传图片之前，请务必调整分辨率，并使用图片压缩工具进行压缩。
+
+图片压缩工具如：https://www.iloveimg.com/
 
 ### 如何贡献
 
